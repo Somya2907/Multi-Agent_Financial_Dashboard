@@ -1,0 +1,26 @@
+# Environment
+.env
+
+# Data artifacts
+data/raw/
+data/processed/
+data/indexes/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

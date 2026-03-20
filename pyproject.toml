@@ -1,0 +1,26 @@
+[project]
+name = "financial-rag-pipeline"
+version = "0.1.0"
+description = "Multi-Agent Financial RAG System - Data Pipeline"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.27",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
+    "tiktoken>=0.7",
+    "openai>=1.0",
+    "boto3>=1.34",
+    "faiss-cpu>=1.8",
+    "pydantic-settings>=2.0",
+    "python-dotenv>=1.0",
+    "numpy>=1.26",
+]
+
+[tool.setuptools.packages.find]
+include = ["config*", "pipeline*", "scripts*"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
