@@ -35,17 +35,70 @@ Rules:
 """
 
 
+def _format_single_company_metrics(metrics: dict) -> list[str]:
+    """Format one company's metrics dict into display lines (no header)."""
+    lines: list[str] = []
+
+    bs_fields = {
+        "current_assets", "current_liabilities",
+        "total_assets", "total_liabilities", "shareholder_equity",
+    }
+
+    # Prominent ratios first
+    cr = metrics.get("current_ratio")
+    de = metrics.get("debt_to_equity")
+    if cr is not None:
+        lines.append(f"  Current Ratio: {cr:.3f}")
+    if de is not None:
+        lines.append(f"  Debt-to-Equity: {de:.3f}")
+
+    # Raw balance sheet line items — check both flat structure and nested "raw" key
+    flat_bs = {k: v for k, v in metrics.items() if k in bs_fields}
+    raw_bs = flat_bs or {k: v for k, v in metrics.get("raw", {}).items() if k in bs_fields}
+    if raw_bs:
+        lines.append("  Balance Sheet Line Items ($ thousands):")
+        for k, v in raw_bs.items():
+            try:
+                lines.append(f"    {k}: {v:,.0f}")
+            except (TypeError, ValueError):
+                lines.append(f"    {k}: {v}")
+
+    # Other metrics
+    skip = bs_fields | {
+        "source", "current_ratio", "debt_to_equity",
+        "ticker", "filing_date", "periods_covered", "raw",
+    }
+    for k, v in metrics.items():
+        if k in skip:
+            continue
+        if k == "periods_covered":
+            lines.append(f"  {k}: {v}")
+        elif isinstance(v, float):
+            lines.append(f"  {k}: {v:.2f}")
+        else:
+            lines.append(f"  {k}: {v}")
+
+    return lines
+
+
 def _format_metrics_block(metrics: dict | None) -> str:
     if not metrics or "error" in metrics:
         return ""
+
+    # ── Multi-company: values are dicts keyed by ticker ───────────────────────
+    if all(isinstance(v, dict) for v in metrics.values()):
+        lines = ["=== STRUCTURED FINANCIAL METRICS (MULTI-COMPANY) ==="]
+        for ticker, m in metrics.items():
+            if not m:
+                lines.append(f"\n{ticker}: [No data available]")
+                continue
+            lines.append(f"\n{ticker}:")
+            lines.extend(_format_single_company_metrics(m))
+        return "\n".join(lines)
+
+    # ── Single company ────────────────────────────────────────────────────────
     lines = ["=== STRUCTURED FINANCIAL METRICS ==="]
-    for k, v in metrics.items():
-        if k in ("ticker", "periods_covered"):
-            lines.append(f"{k}: {v}")
-        elif isinstance(v, float):
-            lines.append(f"{k}: {v:.2f}")
-        else:
-            lines.append(f"{k}: {v}")
+    lines.extend(_format_single_company_metrics(metrics))
     return "\n".join(lines)
 
 

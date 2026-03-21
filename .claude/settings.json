@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from pipeline.agents.financial_metrics import run_financial_metrics; print\\(''import OK''\\)\")",
+      "Bash(python -c \":*)"
+    ]
+  }
+}

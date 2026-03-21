@@ -6,10 +6,6 @@ class Settings(BaseSettings):
     sec_user_agent: str = "Somaya Jain somayaj@andrew.cmu.edu"
     sec_rate_limit: float = 0.11  # seconds between requests (max 10 req/sec)
 
-    # Financial Modeling Prep
-    fmp_api_key: str = ""
-    fmp_base_url: str = "https://financialmodelingprep.com/api/v3"
-
     # OpenAI via CMU AI Gateway (LiteLLM proxy)
     openai_api_key: str = ""
     openai_llm_model: str = "gpt-4o"
@@ -30,7 +26,7 @@ class Settings(BaseSettings):
     # FAISS
     faiss_index_type: str = "FlatIP"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 settings = Settings()

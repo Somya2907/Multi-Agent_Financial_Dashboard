@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python -:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(python -c \"from pipeline.fetchers.xbrl_fetcher import XBRLFetcher; print\\(''XBRLFetcher import OK''\\)\")"
     ]
   }
 }

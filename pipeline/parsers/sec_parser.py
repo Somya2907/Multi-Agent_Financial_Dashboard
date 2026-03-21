@@ -90,6 +90,36 @@ def _segment_sections(text: str) -> list[tuple[str, str]]:
     return sections
 
 
+def extract_balance_sheet_html(html: str) -> str | None:
+    """Find the Consolidated Balance Sheets table in a raw filing HTML.
+
+    Searches for any element containing "balance sheet" and returns the
+    raw HTML string of the nearest following table so the downstream
+    extractor can parse it structurally (row-by-row, cell-by-cell).
+    Returns None if not found.
+    """
+    soup = BeautifulSoup(html, "lxml")
+
+    # Walk every element looking for "balance sheet" in its text node
+    for tag in soup.find_all(string=re.compile(r"balance\s+sheet", re.IGNORECASE)):
+        parent = tag.parent
+        # Walk up a few levels then look for the next table
+        for _ in range(5):
+            if parent is None:
+                break
+            table = parent.find_next("table")
+            if table:
+                row_count = len(table.find_all("tr"))
+                if row_count > 0:
+                    logger.info(f"Balance sheet table found ({row_count} rows)")
+                    # Return raw HTML — balance_sheet.py parses it structurally
+                    return str(table)
+            parent = parent.parent
+
+    logger.debug("No balance sheet table found in filing HTML")
+    return None
+
+
 def parse_filing(
     html: str,
     ticker: str,
@@ -100,11 +130,17 @@ def parse_filing(
     """Parse a single SEC filing HTML into section-segmented documents.
 
     Returns a list of ParsedSection dicts ready for chunking.
+    Also sets 'balance_sheet_text' on the first section if a balance
+    sheet table is detected in the HTML.
     """
+    # Extract balance sheet from raw HTML before cleaning destroys table structure
+    balance_sheet_text = extract_balance_sheet_html(html)
+
     clean_text = _clean_html(html)
     sections = _segment_sections(clean_text)
 
     results = []
+    first = True
     for section_name, section_text in sections:
         parsed = ParsedSection(
             ticker=ticker,
@@ -114,7 +150,12 @@ def parse_filing(
             text=section_text,
             source_url=source_url,
         )
-        results.append(asdict(parsed))
+        section_dict = asdict(parsed)
+        # Attach balance sheet text to the first section only (avoids duplication)
+        if first and balance_sheet_text:
+            section_dict["balance_sheet_text"] = balance_sheet_text
+            first = False
+        results.append(section_dict)
 
     logger.info(
         f"Parsed {ticker} {form_type} ({filing_date}): {len(results)} sections"

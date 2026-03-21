@@ -10,11 +10,9 @@ import numpy as np
 from config.companies import COMPANIES, get_all_tickers
 from pipeline.fetchers.sec_edgar import SECEdgarFetcher
 from pipeline.fetchers.transcripts import TranscriptFetcher
-from pipeline.fetchers.news import NewsFetcher
-from pipeline.fetchers.financials import FinancialsFetcher
+from pipeline.fetchers.xbrl_fetcher import XBRLFetcher
 from pipeline.parsers.sec_parser import parse_filing
 from pipeline.parsers.transcript_parser import parse_transcript
-from pipeline.parsers.news_parser import parse_news_articles
 from pipeline.chunking.chunker import chunk_document
 from pipeline.embedding.embedder import TitanEmbedder
 from pipeline.indexing.faiss_manager import FAISSManager
@@ -26,10 +24,11 @@ CHUNKS_DIR = Path(__file__).resolve().parents[1] / "data" / "processed" / "chunk
 
 async def _fetch_all_data(
     tickers: list[str] | None = None,
-) -> tuple[list[dict], list[dict], list[dict], dict]:
+) -> tuple[list[dict], list[dict], dict]:
     """Fetch all raw data from APIs.
 
-    Returns: (sec_filings, transcripts, news_articles, financials_by_ticker)
+    Returns:
+        (sec_filings, transcripts, xbrl_balance_sheets_by_ticker)
     """
     companies = COMPANIES
     if tickers:
@@ -37,20 +36,18 @@ async def _fetch_all_data(
 
     sec_fetcher = SECEdgarFetcher()
     transcript_fetcher = TranscriptFetcher()
-    news_fetcher = NewsFetcher()
-    financials_fetcher = FinancialsFetcher()
+    xbrl_fetcher = XBRLFetcher()
 
     all_sec_filings = []
     all_transcripts = []
-    all_news = []
-    all_financials = {}
+    xbrl_balance_sheets = {}
 
     for company in companies:
         ticker = company["ticker"]
         cik = company["cik"]
         logger.info(f"--- Fetching data for {ticker} ---")
 
-        # SEC 10-K / 10-Q filings
+        # SEC 10-K / 10-Q filings (HTML → FAISS qualitative index)
         filings = await sec_fetcher.fetch_company_filings(ticker, cik)
         all_sec_filings.extend(filings)
 
@@ -58,26 +55,27 @@ async def _fetch_all_data(
         transcripts = await transcript_fetcher.fetch_company_transcripts(ticker, cik=cik)
         all_transcripts.extend(transcripts)
 
-        # News
-        news = await news_fetcher.fetch_company_news(ticker)
-        all_news.extend(news)
+        # Structured balance sheet via SEC EDGAR XBRL companyfacts API
+        bs = await xbrl_fetcher.fetch_balance_sheet(ticker, cik)
+        if bs:
+            xbrl_balance_sheets[ticker] = bs
 
-        # Structured financials (stored separately, not chunked)
-        financials = await financials_fetcher.fetch_all_financials(ticker)
-        all_financials[ticker] = financials
-
-    return all_sec_filings, all_transcripts, all_news, all_financials
+    return all_sec_filings, all_transcripts, xbrl_balance_sheets
 
 
 def _parse_all_data(
     sec_filings: list[dict],
     transcripts: list[dict],
-    news_articles: list[dict],
 ) -> list[dict]:
-    """Parse all raw data into section-segmented documents."""
+    """Parse all raw data into section-segmented documents for the FAISS index.
+
+    Balance sheet metrics are sourced exclusively from the XBRL API
+    (see _save_xbrl_balance_sheets).  HTML filing text is parsed here so
+    qualitative sections (Risk Factors, MD&A, …) can be chunked and embedded.
+    """
     all_documents = []
 
-    # Parse SEC filings
+    # Parse SEC filings → qualitative text for FAISS
     for filing in sec_filings:
         sections = parse_filing(
             html=filing["html"],
@@ -98,10 +96,6 @@ def _parse_all_data(
             date=t.get("date", ""),
         )
         all_documents.extend(sections)
-
-    # Parse news
-    parsed_news = parse_news_articles(news_articles)
-    all_documents.extend(parsed_news)
 
     logger.info(f"Total parsed documents/sections: {len(all_documents)}")
     return all_documents
@@ -136,15 +130,33 @@ def _save_chunks(chunks: list[dict]):
         logger.info(f"Saved {len(ticker_chunks)} chunks for {ticker}")
 
 
-def _save_financials(financials_by_ticker: dict):
-    """Save structured financial data as JSON (not chunked)."""
-    fin_dir = Path(__file__).resolve().parents[1] / "data" / "raw" / "financials"
-    fin_dir.mkdir(parents=True, exist_ok=True)
-    for ticker, data in financials_by_ticker.items():
-        path = fin_dir / ticker / "all_financials.json"
-        path.parent.mkdir(parents=True, exist_ok=True)
+def _save_xbrl_balance_sheets(xbrl_by_ticker: dict):
+    """Write XBRL-derived balance sheet values to data/financials/{ticker}_balance_sheet.json.
+
+    This is the canonical balance sheet source consumed by the financial
+    metrics agent at query time.  Format::
+
+        {
+            "current_assets":       143566000000.0,
+            "current_liabilities":  134690000000.0,
+            "total_assets":         364980000000.0,
+            "total_liabilities":    308030000000.0,
+            "shareholder_equity":    56950000000.0
+        }
+    """
+    out_dir = Path(__file__).resolve().parents[1] / "data" / "financials"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    for ticker, values in xbrl_by_ticker.items():
+        if not values:
+            continue
+        path = out_dir / f"{ticker}_balance_sheet.json"
         with open(path, "w") as f:
-            json.dump(data, f, indent=2)
+            json.dump(values, f, indent=2)
+        logger.info(
+            f"[XBRL] Saved balance sheet for {ticker}: "
+            + ", ".join(f"{k}={v:,.0f}" for k, v in values.items())
+        )
 
 
 async def run_pipeline(
@@ -161,16 +173,16 @@ async def run_pipeline(
 
     # Step 1: Fetch
     logger.info("Step 1: Fetching data from APIs...")
-    sec_filings, transcripts, news, financials = await _fetch_all_data(tickers)
-    _save_financials(financials)
+    sec_filings, transcripts, xbrl_bs = await _fetch_all_data(tickers)
+    _save_xbrl_balance_sheets(xbrl_bs)         # → data/financials/{ticker}_balance_sheet.json
     logger.info(
-        f"Fetched: {len(sec_filings)} filings, "
-        f"{len(transcripts)} transcripts, {len(news)} news articles"
+        f"Fetched: {len(sec_filings)} filings, {len(transcripts)} transcripts, "
+        f"XBRL balance sheets for: {list(xbrl_bs.keys())}"
     )
 
-    # Step 2: Parse
+    # Step 2: Parse (qualitative text for FAISS)
     logger.info("Step 2: Parsing documents...")
-    documents = _parse_all_data(sec_filings, transcripts, news)
+    documents = _parse_all_data(sec_filings, transcripts)
 
     # Step 3: Chunk
     logger.info("Step 3: Chunking documents...")

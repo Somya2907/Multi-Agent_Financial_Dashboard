@@ -1,16 +1,33 @@
 """Post-RAG Reasoning Layer: retrieve → filter → aggregate → metrics → answer."""
 
+import json
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from pipeline.embedding.embedder import TitanEmbedder
 from pipeline.indexing.faiss_manager import FAISSManager
 from pipeline.reasoning.noise_filter import filter_noise
 from pipeline.reasoning.aggregator import aggregate_chunks
-from pipeline.reasoning.metrics_computer import compute_metrics
 from pipeline.reasoning.answer_generator import generate_answer
 
 logger = logging.getLogger(__name__)
+
+# XBRL balance sheet data written by _save_xbrl_balance_sheets() in orchestrator
+_BS_DIR = Path(__file__).resolve().parents[2] / "data" / "financials"
+
+
+def _load_balance_sheet(ticker: str) -> dict | None:
+    """Load XBRL balance sheet values from data/financials/{ticker}_balance_sheet.json."""
+    path = _BS_DIR / f"{ticker}_balance_sheet.json"
+    if not path.exists():
+        return None
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception as exc:
+        logger.warning(f"Could not load balance sheet for {ticker}: {exc}")
+        return None
 
 
 @dataclass
@@ -115,21 +132,26 @@ class QueryEngine:
         logger.info("[4/5] Aggregating context")
         context, citations = aggregate_chunks(filtered)
 
-        # ── Step 5: Compute financial metrics ────────────────────────────────
+        # ── Step 5: Load XBRL balance sheet metrics ──────────────────────────
         metrics: dict = {}
-        if include_metrics and ticker:
-            logger.info(f"[5/5] Computing metrics for {ticker}")
-            metrics = compute_metrics(ticker)
-        elif include_metrics and not ticker:
-            # Try to infer tickers from retrieved chunks
-            tickers_in_results = list(
-                {c.get("ticker") for c in filtered if c.get("ticker")}
-            )
-            if len(tickers_in_results) == 1:
-                logger.info(f"[5/5] Computing metrics for inferred ticker {tickers_in_results[0]}")
-                metrics = compute_metrics(tickers_in_results[0])
+        effective_ticker = ticker or (
+            list({c.get("ticker") for c in filtered if c.get("ticker")})[0]
+            if len({c.get("ticker") for c in filtered if c.get("ticker")}) == 1
+            else None
+        )
+
+        if include_metrics and effective_ticker:
+            bs = _load_balance_sheet(effective_ticker)
+            if bs:
+                logger.info(f"[5/5] Loaded XBRL balance sheet for {effective_ticker}")
+                metrics = bs
             else:
-                logger.info("[5/5] Skipping metrics (multi-company query)")
+                logger.info(
+                    f"[5/5] No XBRL balance sheet on disk for {effective_ticker} "
+                    "— run the pipeline first"
+                )
+        else:
+            logger.info("[5/5] Skipping metrics (multi-company or include_metrics=False)")
 
         # ── Step 6: Generate answer ──────────────────────────────────────────
         logger.info("[6/6] Generating answer")

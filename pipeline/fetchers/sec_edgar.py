@@ -1,4 +1,4 @@
-"""SEC EDGAR API fetcher for 10-K and 10-Q filings."""
+"""SEC EDGAR API fetcher for 10-K, 10-Q, and 8-K filings."""
 
 import logging
 import re
@@ -15,7 +15,7 @@ SEC_ARCHIVES_URL = (
 
 
 class SECEdgarFetcher(BaseFetcher):
-    """Fetches SEC 10-K and 10-Q filings via the EDGAR API."""
+    """Fetches SEC 10-K, 10-Q, and 8-K filings via the EDGAR API."""
 
     def __init__(self):
         super().__init__(
@@ -94,8 +94,14 @@ class SECEdgarFetcher(BaseFetcher):
         cik: str,
         num_10k: int = 1,
         num_10q: int = 4,
+        num_8k: int = 8,
     ) -> list[dict]:
         """Fetch all target filings for a company.
+
+        Fetches 10-K (annual), 10-Q (quarterly), and 8-K (current reports /
+        material events) filings.  8-K primary documents cover material events
+        such as acquisitions, executive changes, restructurings, and earnings
+        disclosures — useful context for qualitative and risk queries.
 
         Returns a list of dicts with keys: ticker, form, filingDate, accessionNumber, html.
         """
@@ -104,13 +110,15 @@ class SECEdgarFetcher(BaseFetcher):
             logger.error(f"Failed to fetch submissions for {ticker} (CIK: {cik})")
             return []
 
-        # Extract 10-K and 10-Q filing metadata
+        # Extract filing metadata for each form type
         filings_10k = self._extract_filings(submissions, ["10-K"], max_filings=num_10k)
         filings_10q = self._extract_filings(submissions, ["10-Q"], max_filings=num_10q)
-        all_filings = filings_10k + filings_10q
+        filings_8k  = self._extract_filings(submissions, ["8-K"],  max_filings=num_8k)
+        all_filings = filings_10k + filings_10q + filings_8k
 
         logger.info(
-            f"{ticker}: found {len(filings_10k)} 10-K, {len(filings_10q)} 10-Q filings"
+            f"{ticker}: found {len(filings_10k)} 10-K, "
+            f"{len(filings_10q)} 10-Q, {len(filings_8k)} 8-K filings"
         )
 
         results = []
