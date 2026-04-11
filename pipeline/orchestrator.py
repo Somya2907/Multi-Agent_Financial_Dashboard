@@ -1,13 +1,10 @@
 """Pipeline orchestrator: coordinates fetch → parse → chunk → embed → index."""
 
-import asyncio
 import json
 import logging
 from pathlib import Path
 
-import numpy as np
-
-from config.companies import COMPANIES, get_all_tickers
+from config.companies import COMPANIES
 from pipeline.fetchers.sec_edgar import SECEdgarFetcher
 from pipeline.fetchers.transcripts import TranscriptFetcher
 from pipeline.fetchers.xbrl_fetcher import XBRLFetcher
@@ -16,6 +13,7 @@ from pipeline.parsers.transcript_parser import parse_transcript
 from pipeline.chunking.chunker import chunk_document
 from pipeline.embedding.embedder import TitanEmbedder
 from pipeline.indexing.faiss_manager import FAISSManager
+from pipeline.indexing.bm25_index import BM25Index
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +202,11 @@ async def run_pipeline(
     manager = FAISSManager()
     manager.build_index(vectors, chunks)
     manager.save()
+
+    logger.info("Step 5b: Building BM25 sparse index...")
+    bm25 = BM25Index()
+    bm25.build(chunks)
+    bm25.save()
 
     logger.info(
         f"=== Pipeline Complete: {len(chunks)} chunks indexed ==="
