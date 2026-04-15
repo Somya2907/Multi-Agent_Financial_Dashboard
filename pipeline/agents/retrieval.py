@@ -25,6 +25,7 @@ os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import logging
+import re
 
 # Import sentence-transformers (PyTorch) BEFORE faiss so torch's OpenMP
 # runtime is the first one to initialize — prevents macOS segfault.
@@ -41,6 +42,39 @@ from pipeline.reasoning.aggregator import aggregate_chunks
 logger = logging.getLogger(__name__)
 
 _MAX_CHUNKS = 12     # Final output cap (after dedup)
+
+_YEAR_RE = re.compile(r"(19|20)\d{2}")
+
+
+def _chunk_year(chunk: dict) -> int | None:
+    """Extract a 4-digit year from a chunk's fiscal_period or filing_date."""
+    for field in ("fiscal_period", "filing_date"):
+        val = str(chunk.get(field) or "")
+        m = _YEAR_RE.search(val)
+        if m:
+            try:
+                return int(m.group(0))
+            except ValueError:
+                continue
+    return None
+
+
+def _apply_year_filter(chunks: list[dict], year_filter: tuple[int, int] | None) -> list[dict]:
+    """Keep chunks whose year falls within [min_year, max_year].
+
+    Chunks with no parseable year are kept (fail-open) so we don't discard
+    transcripts/news that lack a fiscal_period tag.
+    """
+    if not year_filter:
+        return chunks
+    min_y, max_y = year_filter
+    out = []
+    for c in chunks:
+        y = _chunk_year(c)
+        if y is None or min_y <= y <= max_y:
+            out.append(c)
+    return out
+
 
 # Module-level singletons — loaded once per process
 _embedder: TitanEmbedder | None = None
@@ -90,15 +124,15 @@ def run_retrieval(state: dict) -> dict:
     query = state["query"]
     query_type = state.get("query_type", "general")
     tickers = state.get("tickers", [])
+    year_filter = state.get("year_filter")
 
-    # Apply ticker filter only for single-company queries
-    ticker_filter = (
-        tickers[0] if query_type == "single_company" and len(tickers) == 1 else None
-    )
+    # Apply ticker filter whenever exactly one ticker is known, regardless of
+    # how the planner classified the query text.
+    ticker_filter = tickers[0] if len(tickers) == 1 else None
 
     logger.info(
         f"[Retrieval] Multi-HyDE — query_type={query_type}, "
-        f"ticker_filter={ticker_filter}"
+        f"ticker_filter={ticker_filter}, year_filter={year_filter}"
     )
 
     # ── Multi-HyDE: diverse queries → hypotheses → multi-list FAISS+BM25 → rerank ──
@@ -111,6 +145,14 @@ def run_retrieval(state: dict) -> dict:
         rerank_input=30,
         final_k=_MAX_CHUNKS * 2,  # give filter_noise room to dedup
     )
+
+    # ── Apply year filter (soft — keeps chunks without parseable dates) ─────
+    if year_filter:
+        before = len(reranked)
+        reranked = _apply_year_filter(reranked, year_filter)
+        logger.info(
+            f"[Retrieval] Year filter {year_filter}: {before} → {len(reranked)} chunks"
+        )
 
     # ── Dedup same-section chunks and cap ──────────────────────────────────────
     # min_score=0.0: BGE reranker is the quality gate; we only dedup + cap here.

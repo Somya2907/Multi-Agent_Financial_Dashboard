@@ -108,7 +108,17 @@ def run_planner(state: dict) -> dict:
 
     # Validate tickers against known list; honour caller-supplied hint
     extracted = [t for t in plan.get("tickers", []) if t in _KNOWN_TICKERS]
-    final_tickers = state.get("tickers") or extracted
+    caller_tickers = state.get("tickers") or []
+    final_tickers = caller_tickers or extracted
+
+    # If the caller pinned exactly one ticker (e.g. from /analyze_company),
+    # this is definitively a single-company query regardless of what the LLM
+    # classified the generic query text as.
+    query_type = plan.get("query_type", "general")
+    if len(caller_tickers) == 1:
+        query_type = "single_company"
+    elif len(caller_tickers) > 1:
+        query_type = "comparison"
 
     requires_metrics = bool(plan.get("requires_metrics", False))
 
@@ -117,7 +127,7 @@ def run_planner(state: dict) -> dict:
     metrics_only = requires_metrics and any(kw in q_lower for kw in _METRICS_ONLY_KEYWORDS)
 
     logger.info(
-        f"[Planner] query_type={plan.get('query_type')} "
+        f"[Planner] query_type={query_type} "
         f"tickers={final_tickers} "
         f"metrics={requires_metrics} "
         f"metrics_only={metrics_only} "
@@ -125,7 +135,7 @@ def run_planner(state: dict) -> dict:
     )
 
     return {
-        "query_type": plan.get("query_type", "general"),
+        "query_type": query_type,
         "tickers": final_tickers,
         "requires_metrics": requires_metrics,
         "requires_qualitative": bool(plan.get("requires_qualitative", False)),

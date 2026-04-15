@@ -18,7 +18,11 @@ Graph topology
     │                                                      │
     └── neither ────────────────────────────────────────── ┤
                                                            ▼
+                                                   risk_synthesis  ← always
+                                                           │
                                                    synthesize_answer
+                                                           │
+                                                        critic      ← always
                                                            │
                                                           END
 """
@@ -34,6 +38,8 @@ from pipeline.agents.planner import run_planner
 from pipeline.agents.retrieval import run_retrieval
 from pipeline.agents.financial_metrics import run_financial_metrics
 from pipeline.agents.qualitative import run_qualitative_analysis
+from pipeline.agents.risk_synthesis import run_risk_synthesis
+from pipeline.agents.critic import run_critic
 from pipeline.reasoning.answer_generator import generate_answer
 
 logger = logging.getLogger(__name__)
@@ -47,7 +53,6 @@ def _synthesize_answer(state: dict) -> dict:
     context = state.get("context", "")
     all_metrics = state.get("metrics", {})
     tickers = state.get("tickers", [])
-    query_type = state.get("query_type", "general")
 
     # ── Inject metrics into context ──────────────────────────────────────────
     if all_metrics:
@@ -118,6 +123,35 @@ def _synthesize_answer(state: dict) -> dict:
             + json.dumps(qual, indent=2)
         )
 
+    # ── Risk synthesis block ─────────────────────────────────────────────────
+    risk = state.get("risk_synthesis")
+    if risk and "error" not in risk:
+        risk_lines = ["\n\n=== RISK SYNTHESIS ==="]
+        overall_level = risk.get("overall_risk_level", "UNKNOWN")
+        overall_score = risk.get("overall_risk_score", 0.0)
+        risk_lines.append(
+            f"Overall Risk Level: {overall_level} (score: {overall_score:.2f})"
+        )
+        risk_lines.append(f"Summary: {risk.get('summary', '')}")
+        risk_lines.append("\nRisk Category Breakdown:")
+        for cat in (
+            "market_risk", "credit_risk", "liquidity_risk",
+            "regulatory_risk", "macroeconomic_risk",
+        ):
+            cat_data = risk.get(cat, {})
+            if cat_data:
+                sev = cat_data.get("severity", "?")
+                score = cat_data.get("score", 0.0)
+                evidence = "; ".join(cat_data.get("evidence", []))
+                risk_lines.append(
+                    f"  {cat.replace('_', ' ').title()}: {sev} "
+                    f"({score:.2f}) — {evidence}"
+                )
+        context += "\n".join(risk_lines)
+        logger.info(
+            f"[Synthesize] Injected risk synthesis (overall={overall_level}) into context"
+        )
+
     # ── Pass metrics to LLM prompt (separate from context) ──────────────────
     # For single company pass flat dict; for multi-company pass as-is (all dicts).
     if len(tickers) == 1 and tickers[0] in all_metrics:
@@ -148,13 +182,19 @@ def _route_after_planner(
 
 def _route_after_retrieval(
     state: dict,
-) -> Literal["financial_metrics", "qualitative_analysis", "synthesize_answer"]:
+) -> Literal["financial_metrics", "qualitative_analysis", "risk_synthesis"]:
     """Route after retrieval based on planner flags and chunk availability."""
     chunks = state.get("retrieved_chunks", [])
     needs_metrics = state.get("requires_metrics", False)
     needs_qual = state.get("requires_qualitative", False)
 
-    if needs_metrics:
+    # For single-company analyses, the dashboard always expects both metrics
+    # and qualitative panels — force both to run regardless of the planner's
+    # requires_metrics / requires_qualitative classification of the query text.
+    single_company = len(state.get("tickers", [])) == 1
+    qual_wanted = (needs_qual or single_company) and chunks
+
+    if needs_metrics or single_company:
         # Always run metrics when requested, even if 0 chunks were retrieved
         if not chunks:
             logger.info(
@@ -163,19 +203,23 @@ def _route_after_retrieval(
             )
         return "financial_metrics"
 
-    if needs_qual and chunks:
+    if qual_wanted:
         return "qualitative_analysis"
 
-    return "synthesize_answer"
+    return "risk_synthesis"
 
 
 def _route_after_metrics(
     state: dict,
-) -> Literal["qualitative_analysis", "synthesize_answer"]:
+) -> Literal["qualitative_analysis", "risk_synthesis"]:
     """After financial metrics, optionally run qualitative analysis."""
-    if state.get("requires_qualitative") and state.get("retrieved_chunks"):
+    chunks = state.get("retrieved_chunks")
+    if not chunks:
+        return "risk_synthesis"
+    single_company = len(state.get("tickers", [])) == 1
+    if state.get("requires_qualitative") or single_company:
         return "qualitative_analysis"
-    return "synthesize_answer"
+    return "risk_synthesis"
 
 
 # ── Graph construction ────────────────────────────────────────────────────────
@@ -189,7 +233,9 @@ def build_graph() -> StateGraph:
     workflow.add_node("retrieval", run_retrieval)
     workflow.add_node("financial_metrics", run_financial_metrics)
     workflow.add_node("qualitative_analysis", run_qualitative_analysis)
+    workflow.add_node("risk_synthesis", run_risk_synthesis)
     workflow.add_node("synthesize_answer", _synthesize_answer)
+    workflow.add_node("critic", run_critic)
 
     workflow.set_entry_point("planner")
 
@@ -203,32 +249,36 @@ def build_graph() -> StateGraph:
         },
     )
 
-    # retrieval → financial_metrics | qualitative_analysis | synthesize_answer
+    # retrieval → financial_metrics | qualitative_analysis | risk_synthesis
     workflow.add_conditional_edges(
         "retrieval",
         _route_after_retrieval,
         {
             "financial_metrics": "financial_metrics",
             "qualitative_analysis": "qualitative_analysis",
-            "synthesize_answer": "synthesize_answer",
+            "risk_synthesis": "risk_synthesis",
         },
     )
 
-    # financial_metrics → qualitative_analysis | synthesize_answer
+    # financial_metrics → qualitative_analysis | risk_synthesis
     workflow.add_conditional_edges(
         "financial_metrics",
         _route_after_metrics,
         {
             "qualitative_analysis": "qualitative_analysis",
-            "synthesize_answer": "synthesize_answer",
+            "risk_synthesis": "risk_synthesis",
         },
     )
 
-    # qualitative_analysis → synthesize_answer (always)
-    workflow.add_edge("qualitative_analysis", "synthesize_answer")
+    # qualitative_analysis → risk_synthesis (always)
+    workflow.add_edge("qualitative_analysis", "risk_synthesis")
 
-    # synthesize_answer → END
-    workflow.add_edge("synthesize_answer", END)
+    # risk_synthesis → synthesize_answer (always)
+    workflow.add_edge("risk_synthesis", "synthesize_answer")
+
+    # synthesize_answer → critic → END
+    workflow.add_edge("synthesize_answer", "critic")
+    workflow.add_edge("critic", END)
 
     return workflow.compile()
 
@@ -248,13 +298,17 @@ def _get_graph():
 def run_query(
     query: str,
     ticker: str | None = None,
+    year_filter: tuple[int, int] | None = None,
 ) -> dict:
     """Run the full multi-agent pipeline for a natural language financial query.
 
     Args:
-        query:  Natural language question.
-        ticker: Optional ticker hint; bypasses planner's entity extraction
-                and forces single-company retrieval for this ticker.
+        query:       Natural language question.
+        ticker:      Optional ticker hint; bypasses planner's entity extraction
+                     and forces single-company retrieval for this ticker.
+        year_filter: Optional (min_year, max_year) to limit retrieved chunks
+                     by fiscal_period year. Used by /analyze_company to
+                     restrict to the last 2 years.
 
     Returns:
         Final GraphState dict with keys:
@@ -263,6 +317,7 @@ def run_query(
     """
     initial_state: GraphState = {
         "query": query,
+        "year_filter": year_filter,
         "query_type": "general",
         "tickers": [ticker] if ticker else [],
         "requires_metrics": False,
@@ -273,6 +328,8 @@ def run_query(
         "citations": [],
         "metrics": {},
         "qualitative_analysis": None,
+        "risk_synthesis": None,
+        "critique": None,
         "final_answer": "",
     }
 

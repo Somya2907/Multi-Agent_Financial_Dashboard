@@ -1,26 +1,64 @@
-# Environment
+# ── Secrets / env ────────────────────────────────────────────────────────────
 .env
+.env.local
+.env.*.local
 
-# Data artifacts
+# ── Data artifacts (large, regeneratable) ────────────────────────────────────
 data/raw/
 data/processed/
 data/indexes/
+data/cache/
+data/financials/
 
-# Python
+# ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 *.egg-info/
+*.egg
 dist/
 build/
 .venv/
 venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
 
-# IDE
+# ── Node / Next.js (frontend) ────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/dist/
+frontend/.turbo/
+frontend/.vercel/
+frontend/next-env.d.ts
+frontend/tsconfig.tsbuildinfo
+frontend/coverage/
+
+# Root-level node artifacts (if any tooling installs here)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── IDE / editor ─────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
+*.swo
+.claude/
 
-# OS
+# ── OS ───────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db

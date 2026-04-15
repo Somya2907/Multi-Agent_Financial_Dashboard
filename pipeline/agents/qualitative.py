@@ -64,8 +64,18 @@ def run_qualitative_analysis(state: dict) -> dict:
         if c.get("source_type", "") in _QUALITATIVE_SOURCE_TYPES
     ]
 
+    # Fallback: if no transcript/news chunks were retrieved, use MD&A / risk
+    # factor sections from 10-K / 10-Q filings — these still contain management
+    # narrative even if they're more regulated in tone.
+    if not qual_chunks and chunks:
+        logger.info(
+            "[Qualitative] No transcript/news chunks — falling back to "
+            "top SEC filing chunks for tone/theme extraction"
+        )
+        qual_chunks = chunks
+
     if not qual_chunks:
-        logger.info("[Qualitative] No transcript/news chunks — skipping")
+        logger.info("[Qualitative] No chunks at all — skipping")
         return {"qualitative_analysis": None}
 
     # Use up to 6 highest-scoring qualitative chunks

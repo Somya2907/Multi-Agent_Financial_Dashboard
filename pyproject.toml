@@ -15,10 +15,12 @@ dependencies = [
     "python-dotenv>=1.0",
     "numpy>=1.26",
     "langgraph>=0.2",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
 ]
 
 [tool.setuptools.packages.find]
-include = ["config*", "pipeline*", "scripts*"]
+include = ["config*", "pipeline*", "scripts*", "api*"]
 
 [project.optional-dependencies]
 dev = [
