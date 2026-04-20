@@ -448,7 +448,7 @@ All settings live in [config/settings.py](config/settings.py) (pydantic-settings
 
 | Setting | Default | Notes |
 |---|---|---|
-| `openai_llm_model` | `gpt-4o` | Override via `OPENAI_LLM_MODEL` in `.env`. |
+| `openai_llm_model` | `gpt-5` | Override via `OPENAI_LLM_MODEL` in `.env`. |
 | `openai_base_url` | `https://ai-gateway.andrew.cmu.edu` | CMU gateway; use `https://api.openai.com/v1` for plain OpenAI. |
 | `embedding_model_id` | `amazon.titan-embed-text-v2:0` | Must match the vectors in the built index. |
 | `embedding_dim` | `1024` | |

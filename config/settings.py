@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     # OpenAI via CMU AI Gateway (LiteLLM proxy)
     openai_api_key: str = ""
-    openai_llm_model: str = "gpt-4o"
+    openai_llm_model: str = "gpt-5"
     openai_base_url: str = "https://ai-gateway.andrew.cmu.edu"
 
     # AWS Bedrock (Titan Embeddings)
