@@ -72,6 +72,7 @@ class AnalyzeCompanyRequest(BaseModel):
 class FollowupRequest(BaseModel):
     query: str
     prior_state: dict
+    max_tokens: int | None = None
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
@@ -128,9 +129,10 @@ def followup(req: FollowupRequest) -> dict:
     if not isinstance(req.prior_state, dict) or not req.prior_state:
         raise HTTPException(status_code=400, detail="prior_state must be a non-empty object")
 
-    logger.info(f"[API] /followup q={req.query!r}")
+    logger.info(f"[API] /followup q={req.query!r} max_tokens={req.max_tokens}")
     try:
-        return run_followup(req.query, req.prior_state)
+        kwargs = {"max_tokens": req.max_tokens} if req.max_tokens else {}
+        return run_followup(req.query, req.prior_state, **kwargs)
     except Exception as e:
         logger.exception(f"[API] /followup failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

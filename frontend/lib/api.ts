@@ -28,11 +28,19 @@ export async function analyzeCompany(ticker: string, refresh = false): Promise<G
   return unwrap<GraphState>(res, "Analysis failed");
 }
 
-export async function askFollowup(query: string, priorState: GraphState): Promise<FollowupResponse> {
+export async function askFollowup(
+  query: string,
+  priorState: GraphState,
+  maxTokens?: number,
+): Promise<FollowupResponse> {
   const res = await fetch(`${API_BASE}/followup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, prior_state: priorState }),
+    body: JSON.stringify({
+      query,
+      prior_state: priorState,
+      ...(maxTokens ? { max_tokens: maxTokens } : {}),
+    }),
   });
   return unwrap<FollowupResponse>(res, "Follow-up failed");
 }

@@ -119,12 +119,14 @@ def _format_chunks(chunks: list[dict], max_chunks: int = 8) -> str:
     return "\n".join(lines)
 
 
-def run_followup(query: str, prior_state: dict) -> dict:
+def run_followup(query: str, prior_state: dict, max_tokens: int = 6000) -> dict:
     """Answer a follow-up question grounded in a prior analysis.
 
     Args:
         query: The user's follow-up question.
         prior_state: The GraphState returned by /analyze_company or /query.
+        max_tokens: Completion-token budget. Reasoning models (gpt-5) eat
+            most of this on CoT; multi-company comparisons need 15000+.
 
     Returns:
         {"answer": str, "citations": list[dict]} — citations are reused from
@@ -163,7 +165,7 @@ def run_followup(query: str, prior_state: dict) -> dict:
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_message},
             ],
-            max_completion_tokens=6000,
+            max_completion_tokens=max_tokens,
         )
         answer = (response.choices[0].message.content or "").strip()
         if not answer:
