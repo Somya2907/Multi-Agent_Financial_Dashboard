@@ -99,6 +99,66 @@ def classify_query(query: str) -> QueryType:
     return QueryType.GENERAL
 
 
+# ── Intent classification for section-aware reranking ────────────────────────
+#
+# A finer-grained signal than QueryType: tells the reranker *which* document
+# sections / source types to prefer when scores are close.  Evaluated in
+# priority order (sentiment > risk > metric > general) so that a query like
+# "what did management say about liquidity risk" is treated as sentiment
+# (transcript-heavy) rather than metric.
+
+_SENTIMENT_SIGNALS = {
+    "management", "mgmt", "ceo", "cfo", "said", "stated", "described",
+    "commentary", "guidance", "outlook", "tone", "earnings call",
+    "prepared remarks", "q&a", "transcript", "forward-looking",
+    "sentiment", "ramp", "announced",
+}
+
+_RISK_SIGNALS = {
+    "risk", "risks", "litigation", "lawsuit", "legal proceedings",
+    "regulatory", "regulation", "antitrust", "cybersecurity", "privacy",
+    "compliance", "supply chain", "geopolitical", "interest rate",
+    "foreign exchange", "currency", "fx", "macroeconomic", "inflation",
+    "dependence", "key customer", "key supplier", "threat", "threats",
+    "exposure",
+}
+
+# Intent → (section_keywords, preferred_source_types)
+_INTENT_SECTIONS: dict[str, tuple[list[str], list[str]]] = {
+    "metric": (
+        ["financial statements", "balance sheet", "md&a",
+         "management's discussion", "results of operations",
+         "cash flow", "reserved", "liquidity"],
+        [],
+    ),
+    "risk": (
+        ["risk factors", "legal proceedings", "quantitative"],
+        [],
+    ),
+    "sentiment": (
+        ["prepared remarks", "q&a", "transcript"],
+        ["transcript"],
+    ),
+    "general": ([], []),
+}
+
+
+def classify_intent(query: str) -> str:
+    """Return 'metric' | 'risk' | 'sentiment' | 'general' for rerank biasing."""
+    q = query.lower()
+    if any(s in q for s in _SENTIMENT_SIGNALS):
+        logger.info("[HyDE] Intent: sentiment")
+        return "sentiment"
+    if any(s in q for s in _RISK_SIGNALS):
+        logger.info("[HyDE] Intent: risk")
+        return "risk"
+    if any(s in q for s in _NUMERICAL_SIGNALS):
+        logger.info("[HyDE] Intent: metric")
+        return "metric"
+    logger.info("[HyDE] Intent: general")
+    return "general"
+
+
 # ── Sub-query decomposition for numerical queries ────────────────────────────
 
 # Maps high-level financial concepts → component keyword queries for BM25
@@ -622,7 +682,15 @@ class MultiHyDERetriever:
         )
 
         # ── Step 8: BGE reranking with the ORIGINAL query ─────────────────────
-        reranked = _rerank(query, candidates, top_k=final_k)
+        intent = classify_intent(query)
+        section_kws, pref_sources = _INTENT_SECTIONS[intent]
+        reranked = _rerank(
+            query,
+            candidates,
+            top_k=final_k,
+            section_keywords=section_kws or None,
+            preferred_source_types=pref_sources or None,
+        )
         if reranked:
             logger.info(
                 f"[HyDE] Reranked {len(reranked)} chunks, "

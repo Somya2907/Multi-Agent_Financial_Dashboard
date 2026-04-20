@@ -5,26 +5,22 @@ Graph topology
 
   START
     │
-  planner ─── metrics_only_mode=True ───► financial_metrics
-    │                                            │
-    │ (default)                         qualitative? ─► qualitative
-    ▼                                            │             │
-  retrieval                                      └─────────────┘
-    │                                                     │
-    ├── requires_metrics=True ──► financial_metrics ──────┤
-    │   (or 0 chunks + requires_metrics)                  │
-    │                                                      │
-    ├── requires_qualitative only ──► qualitative ─────────┤
-    │                                                      │
-    └── neither ────────────────────────────────────────── ┤
-                                                           ▼
-                                                   risk_synthesis  ← always
-                                                           │
-                                                   synthesize_answer
-                                                           │
-                                                        critic      ← always
-                                                           │
-                                                          END
+  planner ─── metrics_only_mode=True ───► financial_metrics ──► risk_synthesis
+    │                                                                   ▲
+    │ (default)                                                          │
+    ▼                                                                    │
+  retrieval ──► fan-out ──► [financial_metrics, qualitative_analysis] ──┤
+                                                                         │
+                       (both branches run in parallel,                   │
+                        converge at risk_synthesis)                      │
+                                                                         │
+                                                                  risk_synthesis
+                                                                         │
+                                                                 synthesize_answer
+                                                                         │
+                                                                      critic
+                                                                         │
+                                                                        END
 """
 
 import json
@@ -180,46 +176,32 @@ def _route_after_planner(
     return "retrieval"
 
 
-def _route_after_retrieval(
-    state: dict,
-) -> Literal["financial_metrics", "qualitative_analysis", "risk_synthesis"]:
-    """Route after retrieval based on planner flags and chunk availability."""
+def _route_after_retrieval(state: dict) -> list[str]:
+    """Fan out to metrics and/or qualitative in parallel, or skip both.
+
+    Returns a list of next nodes so LangGraph executes them concurrently.
+    Both branches converge at risk_synthesis via a direct edge.
+    """
     chunks = state.get("retrieved_chunks", [])
-    needs_metrics = state.get("requires_metrics", False)
-    needs_qual = state.get("requires_qualitative", False)
-
-    # For single-company analyses, the dashboard always expects both metrics
-    # and qualitative panels — force both to run regardless of the planner's
-    # requires_metrics / requires_qualitative classification of the query text.
     single_company = len(state.get("tickers", [])) == 1
-    qual_wanted = (needs_qual or single_company) and chunks
+    needs_metrics = state.get("requires_metrics", False) or single_company
+    needs_qual = (state.get("requires_qualitative", False) or single_company) and chunks
 
-    if needs_metrics or single_company:
-        # Always run metrics when requested, even if 0 chunks were retrieved
+    targets: list[str] = []
+    if needs_metrics:
+        targets.append("financial_metrics")
         if not chunks:
             logger.info(
-                "[Route] 0 chunks retrieved + requires_metrics=True "
-                "— falling back to metrics-only path"
+                "[Route] 0 chunks retrieved + needs_metrics — metrics-only path"
             )
-        return "financial_metrics"
+    if needs_qual:
+        targets.append("qualitative_analysis")
 
-    if qual_wanted:
-        return "qualitative_analysis"
+    if not targets:
+        return ["risk_synthesis"]
 
-    return "risk_synthesis"
-
-
-def _route_after_metrics(
-    state: dict,
-) -> Literal["qualitative_analysis", "risk_synthesis"]:
-    """After financial metrics, optionally run qualitative analysis."""
-    chunks = state.get("retrieved_chunks")
-    if not chunks:
-        return "risk_synthesis"
-    single_company = len(state.get("tickers", [])) == 1
-    if state.get("requires_qualitative") or single_company:
-        return "qualitative_analysis"
-    return "risk_synthesis"
+    logger.info(f"[Route] Fan-out after retrieval → {targets}")
+    return targets
 
 
 # ── Graph construction ────────────────────────────────────────────────────────
@@ -249,7 +231,8 @@ def build_graph() -> StateGraph:
         },
     )
 
-    # retrieval → financial_metrics | qualitative_analysis | risk_synthesis
+    # retrieval → [financial_metrics, qualitative_analysis] (parallel fan-out)
+    # or → risk_synthesis when neither agent is needed
     workflow.add_conditional_edges(
         "retrieval",
         _route_after_retrieval,
@@ -260,17 +243,8 @@ def build_graph() -> StateGraph:
         },
     )
 
-    # financial_metrics → qualitative_analysis | risk_synthesis
-    workflow.add_conditional_edges(
-        "financial_metrics",
-        _route_after_metrics,
-        {
-            "qualitative_analysis": "qualitative_analysis",
-            "risk_synthesis": "risk_synthesis",
-        },
-    )
-
-    # qualitative_analysis → risk_synthesis (always)
+    # Both parallel branches converge at risk_synthesis
+    workflow.add_edge("financial_metrics", "risk_synthesis")
     workflow.add_edge("qualitative_analysis", "risk_synthesis")
 
     # risk_synthesis → synthesize_answer (always)

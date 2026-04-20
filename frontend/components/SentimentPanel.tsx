@@ -56,22 +56,6 @@ export function SentimentPanel({ qualitative }: Props) {
         </div>
       </div>
 
-      {/* Management confidence */}
-      <div className="mb-4">
-        <span className="text-xs text-gray-500">Management Confidence: </span>
-        <span
-          className={`text-xs font-semibold ${
-            qualitative.management_confidence === "high"
-              ? "text-green-400"
-              : qualitative.management_confidence === "low"
-              ? "text-red-400"
-              : "text-yellow-400"
-          }`}
-        >
-          {(qualitative.management_confidence ?? "unknown").toUpperCase()}
-        </span>
-      </div>
-
       {/* Key themes */}
       {qualitative.key_themes?.length > 0 && (
         <div className="mb-4">

@@ -1,5 +1,11 @@
 {
   "total_assets": 3411738000000.0,
   "total_liabilities": 3108495000000.0,
-  "shareholder_equity": 303243000000.0
+  "shareholder_equity": 303243000000.0,
+  "cash_and_equivalents": 231845000000.0,
+  "long_term_debt": 317816000000.0,
+  "revenue": 113097000000.0,
+  "net_income": 30509000000.0,
+  "eps_diluted": 3.81,
+  "operating_cash_flow": 12613000000.0
 }

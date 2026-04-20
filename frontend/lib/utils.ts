@@ -18,6 +18,11 @@ export function formatLargeNumber(value: number | null | undefined): string {
   return `$${value.toLocaleString()}`;
 }
 
+export function formatPercent(value: number | null | undefined, decimals = 1): string {
+  if (value === null || value === undefined) return "N/A";
+  return `${(value * 100).toFixed(decimals)}%`;
+}
+
 export function severityColor(severity: string) {
   switch (severity?.toUpperCase()) {
     case "HIGH":

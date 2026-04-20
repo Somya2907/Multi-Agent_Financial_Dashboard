@@ -1,0 +1,16 @@
+id,type,gold_filename,query,rank,recall@5,recall@10,recall@20,rr@10,n_retrieved,latency_ms
+Single_MRO/2007/page_134.pdf-1,type_i,MRO/2007/page_134.pdf,by how much did the weighted average exercise price per share increase from 2005 to 2007?,3,1.0,1.0,1.0,0.3333333333333333,20,79260
+Double_HII/2017/page_104.pdf,type_ii,HII/2017/page_104.pdf,what is the percentage change in the unamortized debt issuance costs associated with the senior notes from 2016 to 2017?,1,1.0,1.0,1.0,1.0,20,139101
+Single_IPG/2009/page_85.pdf-3,type_i,IPG/2009/page_85.pdf,what percentage of amounts expensed in 2009 came from discretionary company contributions?,1,1.0,1.0,1.0,1.0,20,104298
+Single_UNP/2008/page_77.pdf-2,type_i,UNP/2008/page_77.pdf,what was the percentage change in equipment rents payable from 2007 to 2008?,1,1.0,1.0,1.0,1.0,20,140292
+Double_RSG/2016/page_144.pdf,type_ii,RSG/2016/page_144.pdf,what was the ratio of the gallons hedged in 2017 to 2018,1,1.0,1.0,1.0,1.0,20,62982
+Double_MRO/2015/page_18.pdf,type_ii,MRO/2015/page_18.pdf,"for 2016 , what was the total african and us net undeveloped acres expiring , in thousands ? \\n",1,1.0,1.0,1.0,1.0,20,60417
+Single_UNP/2014/page_35.pdf-3,type_i,UNP/2014/page_35.pdf,what was the percentage change in cash provided by operating activities from 2012 to 2013?,3,1.0,1.0,1.0,0.3333333333333333,20,60075
+Single_DVN/2007/page_58.pdf-3,type_i,DVN/2007/page_58.pdf,what percentage of the total oil and gas mmboe comes from canada?,1,1.0,1.0,1.0,1.0,20,52766
+Single_AON/2009/page_46.pdf-3,type_i,AON/2009/page_46.pdf,what was the percent of the change in the risk and insurance brokerage services segment revenue from 2008 2009\\n,1,1.0,1.0,1.0,1.0,20,73411
+Single_CDNS/2018/page_31.pdf-1,type_i,CDNS/2018/page_31.pdf,"what is the total return is $ 100000 are invested in s&p500 on january 1st , 2015 and sold at the end of 2016?",0,0.0,0.0,0.0,0.0,20,50069
+Single_BLK/2014/page_119.pdf-1,type_i,BLK/2014/page_119.pdf,what percent higher is fair value than carrying value?,0,0.0,0.0,0.0,0.0,20,293330
+Single_ETR/2008/page_355.pdf-4,type_i,ETR/2008/page_355.pdf,what is the percent change in gas customers between 2007 and 2008?,1,1.0,1.0,1.0,1.0,20,68326
+Double_PM/2017/page_38.pdf,type_ii,PM/2017/page_38.pdf,what was the change in millions of operating income from 2016 to 2017?,5,1.0,1.0,1.0,0.2,20,97028
+Single_MO/2012/page_44.pdf-4,type_i,MO/2012/page_44.pdf,what is the growth rate in total shipment volume from 2010 to 2011?,1,1.0,1.0,1.0,1.0,20,78054
+Double_PM/2015/page_127.pdf,type_ii,PM/2015/page_127.pdf,what is the percentage increase in total accumulated other comprehensive losses from 2014 to 2015?,2,1.0,1.0,1.0,0.5,20,70277

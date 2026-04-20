@@ -28,14 +28,44 @@ export interface QualitativeAnalysis {
 
 export interface MetricData {
   ticker: string;
+
+  // Liquidity & capital structure
   current_ratio: number | null;
   debt_to_equity: number | null;
+
+  // Profitability
+  gross_margin: number | null;
+  operating_margin: number | null;
+  net_margin: number | null;
+  roe: number | null;
+  roa: number | null;
+
+  // Cash flow
+  free_cash_flow: number | null;
+  fcf_margin: number | null;
+
+  // Per-share
+  eps_diluted: number | null;
+
   raw: {
-    current_assets?: number;
-    current_liabilities?: number;
-    total_assets?: number;
-    total_liabilities?: number;
-    shareholder_equity?: number;
+    // Balance sheet
+    current_assets?: number | null;
+    current_liabilities?: number | null;
+    total_assets?: number | null;
+    total_liabilities?: number | null;
+    shareholder_equity?: number | null;
+    cash_and_equivalents?: number | null;
+    long_term_debt?: number | null;
+    // Income statement
+    revenue?: number | null;
+    cost_of_revenue?: number | null;
+    gross_profit?: number | null;
+    operating_income?: number | null;
+    net_income?: number | null;
+    eps_diluted?: number | null;
+    // Cash flow
+    operating_cash_flow?: number | null;
+    capex?: number | null;
   };
 }
 

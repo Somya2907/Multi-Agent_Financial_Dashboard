@@ -53,13 +53,26 @@ logger = logging.getLogger(__name__)
 _ALL_TICKERS = [c["ticker"] for c in COMPANIES]
 _BS_DIR = Path(__file__).resolve().parents[2] / "data" / "financials"
 
-# Fields required to compute ratios
-_BS_FIELDS = (
+# All raw XBRL fields we may receive (balance sheet + income + cash flow).
+_XBRL_FIELDS = (
+    # Balance sheet
     "current_assets",
     "current_liabilities",
     "total_assets",
     "total_liabilities",
     "shareholder_equity",
+    "cash_and_equivalents",
+    "long_term_debt",
+    # Income statement
+    "revenue",
+    "cost_of_revenue",
+    "gross_profit",
+    "operating_income",
+    "net_income",
+    "eps_diluted",
+    # Cash flow
+    "operating_cash_flow",
+    "capex",
 )
 
 
@@ -87,37 +100,66 @@ def _load_xbrl(ticker: str) -> dict | None:
 
 # ── Ratio computation ─────────────────────────────────────────────────────────
 
+def _safe_div(num: float | None, den: float | None, places: int = 3) -> float | None:
+    """Divide num/den, returning None on missing/zero denominator."""
+    if num is None or den is None or den == 0:
+        return None
+    return round(num / den, places)
+
+
 def _compute_ratios(ticker: str, raw: dict) -> dict:
-    """Compute current_ratio and debt_to_equity with safe division.
+    """Compute all supported ratios with safe division.
 
-    Missing or zero denominators produce None (not an error).
+    Missing or zero denominators produce None (not an error). The returned
+    dict always includes a `raw` pass-through of every XBRL field we know
+    about (values may be None if the source didn't provide them).
     """
-    result: dict = {"ticker": ticker, "raw": {k: raw.get(k) for k in _BS_FIELDS}}
+    result: dict = {
+        "ticker": ticker,
+        "raw": {k: raw.get(k) for k in _XBRL_FIELDS},
+    }
 
+    # Liquidity & capital structure
     ca = raw.get("current_assets")
     cl = raw.get("current_liabilities")
-    if ca is not None and cl:
-        result["current_ratio"] = round(ca / cl, 3)
-    else:
-        logger.warning(
-            f"[FinMetrics] {ticker}: cannot compute current_ratio "
-            f"(current_assets={ca}, current_liabilities={cl})"
-        )
-
     tl = raw.get("total_liabilities")
     eq = raw.get("shareholder_equity")
-    if tl is not None and eq:
-        result["debt_to_equity"] = round(tl / eq, 3)
-    else:
-        logger.warning(
-            f"[FinMetrics] {ticker}: cannot compute debt_to_equity "
-            f"(total_liabilities={tl}, shareholder_equity={eq})"
-        )
+    ta = raw.get("total_assets")
+
+    result["current_ratio"]  = _safe_div(ca, cl)
+    result["debt_to_equity"] = _safe_div(tl, eq)
+
+    # Profitability (income statement)
+    rev = raw.get("revenue")
+    gp  = raw.get("gross_profit")
+    oi  = raw.get("operating_income")
+    ni  = raw.get("net_income")
+
+    result["gross_margin"]     = _safe_div(gp, rev, places=4)
+    result["operating_margin"] = _safe_div(oi, rev, places=4)
+    result["net_margin"]       = _safe_div(ni, rev, places=4)
+    result["roe"]              = _safe_div(ni, eq, places=4)
+    result["roa"]              = _safe_div(ni, ta, places=4)
+
+    # Cash flow
+    ocf   = raw.get("operating_cash_flow")
+    capex = raw.get("capex")
+    fcf   = None
+    if ocf is not None and capex is not None:
+        # capex is reported as a positive outflow; subtract it from OCF
+        fcf = round(ocf - capex, 0)
+    result["free_cash_flow"] = fcf
+    result["fcf_margin"]     = _safe_div(fcf, rev, places=4)
+
+    # Pass-through singletons (nice to expose as top-level for the UI)
+    result["eps_diluted"] = raw.get("eps_diluted")
 
     logger.info(
         f"[FinMetrics] {ticker} "
-        f"current_ratio={result.get('current_ratio')} "
-        f"debt_to_equity={result.get('debt_to_equity')}"
+        f"cr={result['current_ratio']} de={result['debt_to_equity']} "
+        f"gm={result['gross_margin']} om={result['operating_margin']} "
+        f"nm={result['net_margin']} roe={result['roe']} "
+        f"fcf={result['free_cash_flow']}"
     )
     return result
 
@@ -164,8 +206,13 @@ def run_financial_metrics(state: dict) -> dict:
 
             metrics = _compute_ratios(ticker, raw)
 
-            # Only include the ticker if at least one ratio was computed
-            if "current_ratio" not in metrics and "debt_to_equity" not in metrics:
+            # Only include the ticker if at least one ratio was successfully computed
+            computed = [
+                metrics.get(k) for k in
+                ("current_ratio", "debt_to_equity", "gross_margin",
+                 "operating_margin", "net_margin", "roe", "roa", "fcf_margin")
+            ]
+            if all(v is None for v in computed):
                 logger.warning(
                     f"[FinMetrics] {ticker}: no ratios computed — skipping"
                 )

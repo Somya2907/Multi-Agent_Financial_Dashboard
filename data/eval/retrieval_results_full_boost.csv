@@ -1,0 +1,26 @@
+query_id,category,ticker_filter,query,n_retrieved,n_relevant,first_rel_rank,recall@5,recall@10,recall@20,rr@10,latency_ms
+metric_01,metric_lookup,AAPL,What was Apple's current ratio in the most recent 10-K?,20,20,1,1.0,1.0,1.0,1.0,71280
+metric_02,metric_lookup,MSFT,How much long-term debt does Microsoft carry on its balance sheet?,20,20,1,1.0,1.0,1.0,1.0,68291
+metric_03,metric_lookup,NVDA,What is NVIDIA's revenue growth rate in the latest quarter?,20,5,1,1.0,1.0,1.0,1.0,61009
+metric_04,metric_lookup,AMZN,What is Amazon's operating cash flow position?,20,9,1,1.0,1.0,1.0,1.0,76064
+metric_05,metric_lookup,META,What is Meta's debt-to-equity ratio and capital structure?,20,16,1,1.0,1.0,1.0,1.0,76361
+metric_06,metric_lookup,TSLA,Tesla's gross margin trend over the last year,20,17,1,1.0,1.0,1.0,1.0,79404
+metric_07,metric_lookup,GOOGL,Alphabet's total current assets and current liabilities,20,18,1,1.0,1.0,1.0,1.0,62351
+risk_01,risk_factor,AAPL,What are Apple's main risk factors related to supply chain disruption?,20,8,1,1.0,1.0,1.0,1.0,77163
+risk_02,risk_factor,MSFT,What cybersecurity risks does Microsoft disclose?,20,1,1,1.0,1.0,1.0,1.0,77265
+risk_03,risk_factor,GOOGL,What regulatory or antitrust risks does Alphabet face?,20,6,1,1.0,1.0,1.0,1.0,79984
+risk_04,risk_factor,TSLA,What litigation or legal proceedings does Tesla report?,20,7,1,1.0,1.0,1.0,1.0,66873
+risk_05,risk_factor,AMZN,What macroeconomic and interest rate risks does Amazon highlight?,20,0,0,0.0,0.0,0.0,0.0,74607
+risk_06,risk_factor,NVDA,What dependence on key customers or suppliers does NVIDIA disclose?,20,20,1,1.0,1.0,1.0,1.0,81579
+risk_07,risk_factor,AVGO,Broadcom's foreign exchange or currency exposure risks,20,1,2,1.0,1.0,1.0,0.5,87051
+sentiment_01,mgmt_sentiment,NVDA,What did NVIDIA management say about AI demand and data center growth?,20,4,1,1.0,1.0,1.0,1.0,66735
+sentiment_02,mgmt_sentiment,AAPL,What guidance did Apple provide on services revenue in the last earnings call?,20,20,1,1.0,1.0,1.0,1.0,68842
+sentiment_03,mgmt_sentiment,MSFT,Microsoft's management commentary on cloud and Azure performance,20,17,1,1.0,1.0,1.0,1.0,63201
+sentiment_04,mgmt_sentiment,TSLA,How did Tesla's CEO describe production ramp and delivery outlook?,20,10,1,1.0,1.0,1.0,1.0,62173
+sentiment_05,mgmt_sentiment,META,What did Meta say about advertising revenue trends and Reality Labs losses?,20,2,17,0.0,0.0,1.0,0.0,70995
+sentiment_06,mgmt_sentiment,AMZN,Amazon's tone on AWS growth and capital expenditure plans,20,8,1,1.0,1.0,1.0,1.0,66584
+cross_01,cross_company,,Compare liquidity risk between Apple and Microsoft based on current ratio,20,5,3,1.0,1.0,1.0,0.3333333333333333,78871
+cross_02,cross_company,,Which has higher leverage: Amazon or Meta?,20,1,1,1.0,1.0,1.0,1.0,84138
+cross_03,cross_company,,NVIDIA vs Broadcom on AI-related revenue exposure,20,13,1,1.0,1.0,1.0,1.0,72071
+cross_04,cross_company,,Regulatory risk comparison: Google vs Meta,20,4,1,1.0,1.0,1.0,1.0,98300
+cross_05,cross_company,,"Which tech giant has the strongest cash position: Apple, Microsoft, or Alphabet?",20,2,7,0.0,1.0,1.0,0.14285714285714285,80183

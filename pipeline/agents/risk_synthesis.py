@@ -433,7 +433,14 @@ def _llm_rewrite_evidence(
 
 # ── Summary template ──────────────────────────────────────────────────────────
 
-def _build_summary(tickers: list[str], categories: dict, qual: dict) -> str:
+def _build_summary(
+    tickers: list[str],
+    categories: dict,
+    qual: dict,
+    metrics: dict,
+    overall_level: str,
+    overall_score: float,
+) -> str:
     name = ", ".join(tickers) if tickers else "The company"
     tone = (qual.get("overall_tone") or "neutral").capitalize()
 
@@ -453,18 +460,56 @@ def _build_summary(tickers: list[str], categories: dict, qual: dict) -> str:
     top2_name, top2 = ordered[1]
 
     sentences = [
-        f"{name}'s most significant near-term risks are "
-        f"{top1_name} ({top1['severity']}) and {top2_name} ({top2['severity']}).",
-        f"Management tone is {tone.lower()}" + (
-            f", with a sentiment score of {qual.get('sentiment_score', 0):.2f}."
-            if qual.get("sentiment_score") is not None else "."
-        ),
+        f"{name} presents an overall {overall_level} risk profile "
+        f"(composite score {overall_score:.2f}/1.00), with {top1_name} risk "
+        f"({top1['severity']}) and {top2_name} risk ({top2['severity']}) "
+        f"as the most material near-term concerns."
     ]
 
-    # Third sentence from top risk evidence
+    # Metrics signal sentence — pull current_ratio, debt_to_equity, net_margin
+    m_parts: list[str] = []
+    first_ticker = tickers[0] if tickers else None
+    m = metrics.get(first_ticker) if first_ticker else None
+    if isinstance(m, dict):
+        cr = m.get("current_ratio")
+        de = m.get("debt_to_equity")
+        nm = m.get("net_margin")
+        fcf_m = m.get("fcf_margin")
+        if cr is not None:
+            m_parts.append(f"current ratio {cr:.2f}")
+        if de is not None:
+            m_parts.append(f"debt-to-equity {de:.2f}")
+        if nm is not None:
+            m_parts.append(f"net margin {nm * 100:.1f}%")
+        if fcf_m is not None and len(m_parts) < 3:
+            m_parts.append(f"FCF margin {fcf_m * 100:.1f}%")
+    if m_parts:
+        sentences.append(
+            "Key financial signals include " + ", ".join(m_parts[:3]) + "."
+        )
+
+    # Management tone + sentiment sentence
+    tone_sent = f"Management tone reads as {tone.lower()}"
+    if qual.get("sentiment_score") is not None:
+        tone_sent += f" (sentiment score {qual.get('sentiment_score', 0):.2f})"
+    themes = qual.get("risk_themes") or qual.get("key_themes") or []
+    themes = [t for t in themes if isinstance(t, str) and t.strip()]
+    if themes:
+        tone_sent += f", with recurring emphasis on {', '.join(themes[:2])}"
+    sentences.append(tone_sent + ".")
+
+    # Top risk evidence sentence
     top_ev = top1["evidence"][0] if top1["evidence"] else ""
     if top_ev:
-        sentences.append(top_ev + ".")
+        ev_clean = top_ev.rstrip(".")
+        sentences.append(f"On the {top1_name} side, {ev_clean[0].lower() + ev_clean[1:]}.")
+
+    # Forward-looking cue if available — ensures ≥4 sentences when evidence is thin
+    forward = qual.get("forward_looking") or []
+    forward = [f for f in forward if isinstance(f, str) and f.strip()]
+    if forward and len(sentences) < 5:
+        fwd_clean = forward[0].rstrip(".")
+        sentences.append(f"Looking ahead, {fwd_clean[0].lower() + fwd_clean[1:]}.")
 
     return " ".join(sentences)
 
@@ -513,7 +558,7 @@ def run_risk_synthesis(state: dict) -> dict:
             2,
         )
         overall_level = _score_to_severity(overall_score)
-        summary = _build_summary(tickers, categories, qual)
+        summary = _build_summary(tickers, categories, qual, metrics, overall_level, overall_score)
 
         result = {
             **categories,

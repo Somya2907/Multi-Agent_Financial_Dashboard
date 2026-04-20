@@ -10,6 +10,9 @@ data/indexes/
 data/cache/
 data/financials/
 
+# ── Eval datasets (downloaded, regeneratable) ────────────────────────────────
+data/eval/convfinqa/
+
 # ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc

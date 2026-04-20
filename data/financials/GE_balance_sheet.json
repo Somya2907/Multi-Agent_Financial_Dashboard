@@ -3,5 +3,15 @@
   "current_liabilities": 38980000000.0,
   "total_assets": 130169000000.0,
   "total_liabilities": 111271000000.0,
-  "shareholder_equity": 18677000000.0
+  "shareholder_equity": 18677000000.0,
+  "cash_and_equivalents": 12392000000.0,
+  "long_term_debt": 20469000000.0,
+  "revenue": 45855000000.0,
+  "cost_of_revenue": 6761000000.0,
+  "gross_profit": 7027000000.0,
+  "operating_income": 22887000000.0,
+  "net_income": 8704000000.0,
+  "eps_diluted": 8.14,
+  "operating_cash_flow": 8537000000.0,
+  "capex": 1371000000.0
 }
